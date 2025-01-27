@@ -1,0 +1,222 @@
+module;
+
+#include <algorithm>
+#include <iostream>
+#include <iomanip>
+#include <ranges>
+#include <bit>
+
+#include <sstream>
+
+#include <climits>
+#include <cstring>
+#include <cstdint>
+
+export module App:hash;
+
+namespace app::istream {
+  export struct Fail {
+    Fail(std::istream& is)
+      : is{is}, g{is.tellg()}, flags{is.flags()}, state{is.rdstate()} {}
+
+    std::istream& operator()() {
+      is.clear();
+      is.seekg(g, is.beg);
+      is.flags(flags);
+      is.setstate(state | std::ios_base::failbit);
+      return is;
+    }
+
+    std::ios::iostate state;
+    std::ios_base::fmtflags flags;
+    std::streampos g;
+    std::istream& is;
+  };
+}
+
+static_assert(CHAR_BIT == 8);
+static_assert(std::endian::native == std::endian::little);
+
+namespace app::bits {
+  constexpr void reset(void* data, size_t from, size_t to) {
+    const int pad[] = {from % CHAR_BIT ? 1 : 0, to % CHAR_BIT ? 1 : 0};
+
+    if (pad[0])
+      ((char*)data)[from / CHAR_BIT] &= 0xff >> (CHAR_BIT - from % CHAR_BIT);
+
+    void* dest = ((char*)data) + from / CHAR_BIT + pad[0];
+    size_t count = to / CHAR_BIT - (from / CHAR_BIT + pad[0]);
+
+    memset(dest, 0, count);
+
+    if (pad[1])
+      ((char*)data)[to / CHAR_BIT] &= 0xff << (to % CHAR_BIT);
+  }
+}
+
+namespace app::sha::v1 {
+  using Digest = uint32_t[5];
+  using Schedule = uint32_t[80];
+  using Message = uint32_t[16];
+
+  struct Hash : public std::array<uint32_t, 5> {
+    Hash() = default;
+
+    Hash(const Digest& digest) {
+      std::copy(std::begin(digest), std::end(digest), std::begin(*this));
+    }
+
+    friend std::ostream& operator<<(std::ostream&, const Hash&);
+    friend std::istream& operator>>(std::istream&, Hash&);
+  };
+
+  std::ostream& operator<<(std::ostream& os, const Hash& hash) {
+    auto flags = os.flags();
+    os << std::hex;
+    for (const auto& value : hash)
+      os  << std::setw(8)
+          << std::setfill('0')
+          << value;
+    os.flags(flags);
+    return os;
+  }
+
+  std::istream& operator>>(std::istream& is, Hash& hash) {
+    istream::Fail fail{is};
+    auto flags = is.flags();
+    for (auto& value : hash) {
+      std::string str;
+      is >> std::setw(8) >> str;
+
+      if (!is)
+        return fail();
+
+      std::istringstream istr{str};
+
+      istr >> std::hex >> value;
+
+      if (istr.fail())
+        return fail();
+    }
+    is.flags(flags);
+    return is;
+  }
+
+  std::invalid_argument bad_t(int t) {
+    return std::invalid_argument{"t (" + std::to_string(t) + ") out of range [0, 80]"};
+  }
+
+  constexpr uint32_t ch(uint32_t x, uint32_t y, uint32_t z) {
+    return (x & y) ^ ((~x) & z);
+  }
+
+  constexpr uint32_t parity(uint32_t x, uint32_t y, uint32_t z) {
+    return x ^ y ^ z;
+  }
+
+  constexpr uint32_t maj(uint32_t x, uint32_t y, uint32_t z) {
+    return (x & y) ^ (x & z) ^ (y & z);
+  }
+
+  constexpr uint32_t ft(int t, uint32_t x, uint32_t y, uint32_t z) {
+    if (0 <= t && t <= 19)
+      return ch(x, y, z);
+    if ((20 <= t && t <= 39) || (60 <= t && t <= 79))
+      return parity(x, y, z);
+    if (40 <= t && t <= 59)
+      return maj(x, y, z);
+    throw bad_t(t);
+  }
+
+  constexpr uint32_t kt(int t) {
+    if (0 <= t && t <= 19)
+      return 0x5a827999;
+    if (20 <= t && t <= 39)
+      return 0x6ed9eba1;
+    if (40 <= t && t <= 59)
+      return 0x8f1bbcdc;
+    if (60 <= t && t <= 79)
+      return 0xca62c1d6;
+    throw bad_t(t);
+  }
+
+  void schedule(Schedule& W, const Message& M) {
+    std::transform(M, M + 16, W, [](uint32_t x){ return std::byteswap(x); });
+    for (int t = 16; t < 80; t++)
+      W[t] = std::rotl(W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16], 1);
+  }
+
+  constexpr void update(Digest& digest, Message& M) {
+    Schedule W;
+    schedule(W, M);
+
+    uint32_t a = digest[0];
+    uint32_t b = digest[1];
+    uint32_t c = digest[2];
+    uint32_t d = digest[3];
+    uint32_t e = digest[4];
+    for (int t = 0; t < 80; t++) {
+      uint32_t T = std::rotl(a, 5) + ft(t, b, c, d) + e + kt(t) + W[t];
+      e = d;
+      d = c;
+      c = std::rotl(b, 30);
+      b = a;
+      a = T;
+    }
+
+    digest[0] += a;
+    digest[1] += b;
+    digest[2] += c;
+    digest[3] += d;
+    digest[4] += e;
+  }
+
+  constexpr void pad(Message& M, uint64_t bits, uint64_t total) {
+    bits::reset(M, bits, 511 - 64);
+    ((char*)M)[bits / CHAR_BIT] = 0x80;
+    ((uint64_t*)M)[512 / 64 - 1] = std::byteswap(total);
+  }
+
+  constexpr void pad(Message& M, Message P, uint64_t bits, uint64_t total) {
+    bits::reset(M, bits, 511);
+    bits::reset(P, 0, 511 - 64);
+    ((char*)M)[bits / CHAR_BIT] = 0x80;
+    ((uint64_t*)P)[512 / 64 - 1] = std::byteswap(total);
+  }
+
+  export Hash hash(std::istream& istream) {
+    Digest digest{0x67452301ull, 0xefcdab89ull, 0x98badcfeull, 0x10325476ull, 0xc3d2e1f0ull};
+
+    Message M;
+    Message P; // second message, when padding goes over one
+    uint64_t total = 0;
+
+    while (istream) {
+      istream.read((char *)M, 512 / CHAR_BIT);
+      const uint64_t bits = istream.gcount() * CHAR_BIT;
+      total += bits;
+
+      if (bits == 512) {
+        update(digest, M);
+        continue;
+      }
+
+      if (bits <= 447) {
+        pad(M, bits, total);
+      } else {
+        pad(M, P, bits, total);
+      }
+
+      update(digest, M);
+
+      if (447 < bits)
+        update(digest, P);
+    }
+
+    return digest;
+  }
+
+  export Hash hash(std::istream&& istream) {
+    return hash(istream);
+  }
+}

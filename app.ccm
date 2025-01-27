@@ -1,0 +1,168 @@
+module;
+
+#include <filesystem>
+#include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+
+#include "project.hh"
+
+export module App;
+import :options;
+import :hash;
+
+namespace app {
+  namespace fs = std::filesystem;
+
+  struct Hash {
+    Hash() = default;
+
+    Hash(const sha::v1::Hash& hash,
+         const std::string& filename,
+         bool tag,
+         std::ios_base::openmode openmode,
+         char ending)
+      : hash{hash},
+        filename{filename},
+        tag{tag},
+        openmode{openmode},
+        ending{ending} {}
+
+    friend std::ostream& operator<<(std::ostream&, const Hash&);
+    friend std::istream& operator>>(std::istream&, Hash&);
+
+    sha::v1::Hash hash;
+    std::string filename;
+    bool tag;
+    std::ios_base::openmode openmode;
+    char ending;
+  };
+
+  std::ostream& operator<<(std::ostream& os, const Hash& it) {
+    auto& hash = it.hash;
+    auto& filename = it.filename;
+    bool tag = it.tag;
+    auto& openmode = it.openmode;
+    char ending = it.ending;
+    if (!tag)
+      os << hash
+         << (openmode & std::ios_base::binary ? " *" : "  ") << filename
+         << ending;
+    else
+      os << "SHA1 (" << filename << ") = "
+         << hash
+         << ending;
+    return os;
+  }
+
+  void skipws(std::istream& is) {
+    if (!is)
+      return;
+    char ch;
+    is >> std::skipws >> ch;
+    is.unget();
+  }
+
+  std::istream& operator>>(std::istream& is, Hash& it) {
+    istream::Fail fail{is};
+
+    auto& hash = it.hash;
+    auto& filename = it.filename;
+    auto& tag = it.tag;
+    auto& openmode = it.openmode;
+    auto& ending = it.ending;
+
+    std::string str;
+
+    is >> str;
+    if (!is)
+      return fail();
+
+    tag = str == "SHA1";
+    if (tag) {
+      openmode = std::ios_base::in | std::ios_base::binary;
+      is >> str;
+      if (!is || str.front() != '(' || str.back() != ')')
+        return fail();
+      filename = std::string{std::next(str.begin()), std::prev(str.end())};
+      is >> str;
+      if (!is || str.front() != '=')
+        return fail();
+      is >> hash;
+      if (is.fail())
+        return is;
+    } else {
+      std::istringstream istr{str};
+      istr >> hash;
+      if (istr.fail())
+        return fail();
+      is >> filename;
+      openmode = (filename[0] == '*' && !fs::exists(filename)
+                  ? std::ios_base::in | std::ios_base::binary
+                  : std::ios_base::in);
+      if ((openmode & std::ios_base::binary) && filename[0] == '*')
+        filename.erase(0, 1);
+    }
+
+    ending = is.get();
+    return is;
+  }
+
+  int print(Options& options) {
+    const bool binary = options.mode == Mode::kBinary;
+    const bool zero = options.zero;
+    const bool tag = options.tag;
+    const std::ios_base::openmode openmode = (binary || tag
+                                              ? std::ios_base::in | std::ios_base::binary
+                                              : std::ios_base::in);
+
+    for (auto& filename : options.filenames) {
+      const auto& hash = sha::v1::hash(std::ifstream{filename, openmode});
+      std::cout << Hash{hash, filename, tag, openmode, zero ? '\0' : '\n'};
+    }
+
+    return 0;
+  }
+
+  int verify(Options& options) {
+    for (auto& filename : options.filenames) {
+      std::ifstream input{filename};
+      while (skipws(input), input) {
+        Hash hash;
+        input >> hash;
+
+        if (input.fail()) {
+          std::string line;
+          input.clear();
+          std::getline(input, line);
+          std::cerr << line << ": FAILED to parse" << std::endl;
+          continue;
+        }
+
+        const auto& filename = hash.filename;
+        const auto& openmode = hash.openmode;
+        std::ifstream is{filename, openmode};
+
+        if (!is.good()) {
+          std::cerr << filename << ": FAILED open or read" << std::endl;
+          continue;
+        }
+
+        const auto& shav1_hash = sha::v1::hash(is);
+        std::cout << filename << ": " << (shav1_hash == hash.hash ? "OK" : "FAILED") << std::endl;
+      }
+    }
+    return 0;
+  }
+
+  export int run(int argc, char* argv[]) {
+    Options options = parse(argc, argv);
+
+    if (options.ignore)
+      return options.success ? 0 : -1;
+
+    const bool check = options.check;
+    return !check ? print(options) : verify(options);
+  }
+}

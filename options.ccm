@@ -1,0 +1,85 @@
+module;
+
+#include <iostream>
+#include <fstream>
+
+#include <cxxopts.hpp>
+
+#include "project.hh"
+
+export module App:options;
+
+namespace app {
+  export enum class Mode {kBinary, kText};
+
+  export struct Options {
+    bool success;
+    bool ignore;
+
+    std::vector<std::string> filenames;
+
+    Mode mode;
+    bool check;
+    bool tag;
+    bool zero;
+  };
+
+  export Options parse(int argc, char* argv[]) {
+    Options options{.success = false, .ignore = true};
+
+    cxxopts::Options parser(kProjectName, kProjectDescription);
+    parser
+      .show_positional_help()
+      .set_width(70)
+      .add_options()
+      ("b,binary", "read in binary mode")
+      ("c,check", "read checksums from the FILEs and check them")
+      ("tag", "create a BSD-style checksum")
+      ("t,text", "read in text mode (default)")
+      ("z,zero", "end each output line with NUL, not newline, and disable file name escaping")
+      ("help", "display this help and exit")
+      ("version", "output version information and exit")
+      ("FILEs", "FILEs used to evaluate the hashes", cxxopts::value<std::vector<std::string>>());
+
+    parser.parse_positional({"FILEs"});
+
+    cxxopts::ParseResult map;
+    try {
+      map = parser.parse(argc, argv);
+    } catch (std::exception& e) {
+      std::cerr << kProjectName << ": " << e.what() << std::endl;
+      return options;
+    }
+
+    if (map.count("help")) {
+      std::cout << parser.help();
+      options.success = true;
+      return options;
+    }
+
+    if (map.count("version")) {
+      std::cout << kVersion << std::endl;
+      options.success = true;
+      return options;
+    }
+
+    if (map.count("FILEs"))
+      options.filenames = map["FILEs"].as<std::vector<std::string>>();
+
+    for (auto&& filename : options.filenames) {
+      if (!std::ifstream{filename}.good()) {
+        std::cerr << kProjectName << ": bad FILE '" << filename << "'" << std::endl;
+        return options;
+      }
+    }
+
+    options.mode = map.count("binary") ? Mode::kBinary : Mode::kText;
+    options.check = map.count("check");
+    options.tag = map.count("tag");
+    options.zero = map.count("zero");
+
+    options.ignore = false;
+
+    return options;
+  }
+}

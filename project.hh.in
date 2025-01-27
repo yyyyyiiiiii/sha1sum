@@ -1,0 +1,5 @@
+namespace app {
+  constexpr char kProjectName[] = "@PROJECT_NAME@";
+  constexpr char kProjectDescription[] = "@PROJECT_DESCRIPTION@";
+  constexpr char kVersion[] = "@PROJECT_NAME@ @PROJECT_VERSION@";
+}
