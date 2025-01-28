@@ -1,10 +1,11 @@
 module;
 
-#include <type_traits> 
+#include <type_traits>
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
 #include <ranges>
+#include <span>
 #include <bit>
 
 #include <sstream>
@@ -518,6 +519,95 @@ namespace app::sha::v512 {
     digest[5] = 0x9b05688c2b3e6c1f;
     digest[6] = 0x1f83d9abfb41bd6b;
     digest[7] = 0x5be0cd19137e2179;
+  }
+
+  export Hash hash(std::istream& input) {
+    return sha::hash<Hash, Digest, Message, uint128_t, digest, update>(input);
+  }
+
+  export Hash hash(std::istream&& istream) {
+    return hash(istream);
+  }
+}
+
+namespace app::sha::v512_224 {
+  using Digest = uint64_t[8];
+  using Message = uint64_t[16];
+  using Schedule = uint64_t[80];
+
+  struct Hash : public std::array<uint64_t, 4> {
+    using type = uint64_t;
+
+    Hash() = default;
+
+    Hash(const Digest& digest) {
+      std::copy(digest, digest + 4, std::begin(*this));
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Hash& hash) {
+      auto flags = os.flags();
+      os << std::hex;
+      for (int i = 0; i < hash.size() - 1; i++)
+        os  << std::setw(sizeof(type) * 2)
+            << std::setfill('0')
+            << hash[i];
+      os  << std::setw(sizeof(type))
+          << std::setfill('0')
+          << (hash.back() >> (sizeof(type) * CHAR_BIT / 2));
+      os.flags(flags);
+      return os;
+    }
+
+    friend std::istream& operator>>(std::istream& is, Hash& hash) {
+      istream::Fail fail{is};
+      auto flags = is.flags();
+
+      for (int i = 0; i < hash.size() - 1; i++) {
+        std::string str;
+        is >> std::setw(sizeof(type) * 2) >> str;
+
+        if (!is)
+          return fail();
+
+        std::istringstream istr{str};
+
+        istr >> std::hex >> hash[i];
+
+        if (istr.fail())
+          return fail();
+      }
+
+      std::string str;
+      is >> std::setw(sizeof(type)) >> str;
+
+      if (!is)
+        return fail();
+
+      std::istringstream istr{str};
+
+      istr >> std::hex >> hash.back();
+
+      if (istr.fail())
+        return fail();
+
+      hash.back() <<= (sizeof(type) * CHAR_BIT / 2);
+
+      is.flags(flags);
+      return is;
+    }
+  };
+
+  using namespace sha::v384::functions;
+
+  constexpr void digest(Digest& digest) {
+    digest[0] = 0x8c3d37c819544da2;
+    digest[1] = 0x73e1996689dcd4d6;
+    digest[2] = 0x1dfab7ae32ff9c82;
+    digest[3] = 0x679dd514582f9fcf;
+    digest[4] = 0x0f6d2b697bd44da8;
+    digest[5] = 0x77e36f7304c48942;
+    digest[6] = 0x3f9d85a86a1d36c8;
+    digest[7] = 0x1112e6ad91d692a1;
   }
 
   export Hash hash(std::istream& input) {
