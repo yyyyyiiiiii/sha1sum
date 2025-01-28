@@ -136,6 +136,49 @@ namespace app::sha {
     ((char*)M)[bits / CHAR_BIT] = 0x80;
     ((U*)P)[M_bits / U_bits - 1] = std::byteswap(total);
   }
+
+  template <class D>
+  using digest_fn_t = void(D&);
+
+  template <class D, class M>
+  using update_fn_t = void(D&, const M&);
+
+  template <class H, class D, class M_t, class U, digest_fn_t<D> init_digest, update_fn_t<D, M_t> update>
+  H hash(std::istream& istream) {
+    D digest;
+    init_digest(digest);
+
+    M_t M;
+    M_t P; // second message, when padding goes over one
+    U total = 0;
+
+    constexpr U M_bits = sizeof(M) * CHAR_BIT;
+    constexpr U U_bits = sizeof(U) * CHAR_BIT;
+    constexpr U threshold = M_bits - U_bits - 1;
+
+    while (istream) {
+      istream.read((char *)M, M_bits / CHAR_BIT);
+      const U bits = istream.gcount() * CHAR_BIT;
+      total += bits;
+
+      if (bits == M_bits) {
+        update(digest, M);
+        continue;
+      }
+
+      if (bits <= threshold)
+        pad(M, bits, total);
+      else
+        pad(M, P, bits, total);
+
+      update(digest, M);
+
+      if (threshold < bits)
+        update(digest, P);
+    }
+
+    return digest;
+  }
 }
 
 namespace app::sha::v1 {
@@ -170,7 +213,7 @@ namespace app::sha::v1 {
       W[t] = std::rotl(W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16], 1);
   }
 
-  constexpr void update(Digest& digest, Message& M) {
+  constexpr void update(Digest& digest, const Message& M) {
     Schedule W;
     schedule(W, M);
 
@@ -195,35 +238,16 @@ namespace app::sha::v1 {
     digest[4] += e;
   }
 
-  export Hash hash(std::istream& istream) {
-    Digest digest{0x67452301ull, 0xefcdab89ull, 0x98badcfeull, 0x10325476ull, 0xc3d2e1f0ull};
+  constexpr void digest(Digest& digest) {
+    digest[0] = 0x67452301;
+    digest[1] = 0xefcdab89;
+    digest[2] = 0x98badcfe;
+    digest[3] = 0x10325476;
+    digest[4] = 0xc3d2e1f0;
+  }
 
-    Message M;
-    Message P; // second message, when padding goes over one
-    uint64_t total = 0;
-
-    while (istream) {
-      istream.read((char *)M, 512 / CHAR_BIT);
-      const uint64_t bits = istream.gcount() * CHAR_BIT;
-      total += bits;
-
-      if (bits == 512) {
-        update(digest, M);
-        continue;
-      }
-
-      if (bits <= 447)
-        pad(M, bits, total);
-      else
-        pad(M, P, bits, total);
-
-      update(digest, M);
-
-      if (447 < bits)
-        update(digest, P);
-    }
-
-    return digest;
+  export Hash hash(std::istream& input) {
+    return sha::hash<Hash, Digest, Message, uint64_t, digest, update>(input);
   }
 
   export Hash hash(std::istream&& istream) {
@@ -274,7 +298,7 @@ namespace app::sha::v224 {
       W[t] = s1(W[t - 2]) + W[t - 7] + s0(W[t - 15]) + W[t - 16];
   }
 
-  constexpr void update(Digest& digest, Message& M) {
+  constexpr void update(Digest& digest, const Message& M) {
     Schedule W;
     schedule(W, M);
 
@@ -309,35 +333,19 @@ namespace app::sha::v224 {
     digest[7] += h;
   }
 
-  export Hash hash(std::istream& istream) {
-    Digest digest{0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939, 0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4};
+  constexpr void digest(Digest& digest) {
+    digest[0] = 0xc1059ed8;
+    digest[1] = 0x367cd507;
+    digest[2] = 0x3070dd17;
+    digest[3] = 0xf70e5939;
+    digest[4] = 0xffc00b31;
+    digest[5] = 0x68581511;
+    digest[6] = 0x64f98fa7;
+    digest[7] = 0xbefa4fa4;
+  }
 
-    Message M;
-    Message P; // second message, when padding goes over one
-    uint64_t total = 0;
-
-    while (istream) {
-      istream.read((char *)M, 512 / CHAR_BIT);
-      const uint64_t bits = istream.gcount() * CHAR_BIT;
-      total += bits;
-
-      if (bits == 512) {
-        update(digest, M);
-        continue;
-      }
-
-      if (bits <= 447)
-        pad(M, bits, total);
-      else
-        pad(M, P, bits, total);
-
-      update(digest, M);
-
-      if (447 < bits)
-        update(digest, P);
-    }
-
-    return digest;
+  export Hash hash(std::istream& input) {
+    return sha::hash<Hash, Digest, Message, uint64_t, digest, update>(input);
   }
 
   export Hash hash(std::istream&& istream) {
@@ -388,7 +396,7 @@ namespace app::sha::v256 {
       W[t] = s1(W[t - 2]) + W[t - 7] + s0(W[t - 15]) + W[t - 16];
   }
 
-  constexpr void update(Digest& digest, Message& M) {
+  constexpr void update(Digest& digest, const Message& M) {
     Schedule W;
     schedule(W, M);
 
@@ -423,35 +431,19 @@ namespace app::sha::v256 {
     digest[7] += h;
   }
 
-  export Hash hash(std::istream& istream) {
-    Digest digest{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+  constexpr void digest(Digest& digest) {
+    digest[0] = 0x6a09e667;
+    digest[1] = 0xbb67ae85;
+    digest[2] = 0x3c6ef372;
+    digest[3] = 0xa54ff53a;
+    digest[4] = 0x510e527f;
+    digest[5] = 0x9b05688c;
+    digest[6] = 0x1f83d9ab;
+    digest[7] = 0x5be0cd19;
+  }
 
-    Message M;
-    Message P; // second message, when padding goes over one
-    uint64_t total = 0;
-
-    while (istream) {
-      istream.read((char *)M, 512 / CHAR_BIT);
-      const uint64_t bits = istream.gcount() * CHAR_BIT;
-      total += bits;
-
-      if (bits == 512) {
-        update(digest, M);
-        continue;
-      }
-
-      if (bits <= 447)
-        pad(M, bits, total);
-      else
-        pad(M, P, bits, total);
-
-      update(digest, M);
-
-      if (447 < bits)
-        update(digest, P);
-    }
-
-    return digest;
+  export Hash hash(std::istream& input) {
+    return sha::hash<Hash, Digest, Message, uint64_t, digest, update>(input);
   }
 
   export Hash hash(std::istream&& istream) {
@@ -516,7 +508,7 @@ namespace app::sha::v384 {
       W[t] = s1(W[t - 2]) + W[t - 7] + s0(W[t - 15]) + W[t - 16];
   }
 
-  constexpr void update(Digest& digest, Message& M) {
+  constexpr void update(Digest& digest, const Message& M) {
     Schedule W;
     schedule(W, M);
 
@@ -551,38 +543,19 @@ namespace app::sha::v384 {
     digest[7] += h;
   }
 
-  export Hash hash(std::istream& istream) {
-    Digest digest{0xcbbb9d5dc1059ed8, 0x629a292a367cd507,
-                  0x9159015a3070dd17, 0x152fecd8f70e5939,
-                  0x67332667ffc00b31, 0x8eb44a8768581511,
-                  0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4};
+  constexpr void digest(Digest& digest) {
+    digest[0] = 0xcbbb9d5dc1059ed8;
+    digest[1] = 0x629a292a367cd507;
+    digest[2] = 0x9159015a3070dd17;
+    digest[3] = 0x152fecd8f70e5939;
+    digest[4] = 0x67332667ffc00b31;
+    digest[5] = 0x8eb44a8768581511;
+    digest[6] = 0xdb0c2e0d64f98fa7;
+    digest[7] = 0x47b5481dbefa4fa4;
+  }
 
-    Message M;
-    Message P; // second message, when padding goes over one
-    uint128_t total = 0;
-
-    while (istream) {
-      istream.read((char *)M, 1024 / CHAR_BIT);
-      const uint128_t bits = istream.gcount() * CHAR_BIT;
-      total += bits;
-
-      if (bits == 1024) {
-        update(digest, M);
-        continue;
-      }
-
-      if (bits <= 895)
-        pad(M, bits, total);
-      else
-        pad(M, P, bits, total);
-
-      update(digest, M);
-
-      if (895 < bits)
-        update(digest, P);
-    }
-
-    return digest;
+  export Hash hash(std::istream& input) {
+    return sha::hash<Hash, Digest, Message, uint128_t, digest, update>(input);
   }
 
   export Hash hash(std::istream&& istream) {
@@ -647,7 +620,7 @@ namespace app::sha::v512 {
       W[t] = s1(W[t - 2]) + W[t - 7] + s0(W[t - 15]) + W[t - 16];
   }
 
-  constexpr void update(Digest& digest, Message& M) {
+  constexpr void update(Digest& digest, const Message& M) {
     Schedule W;
     schedule(W, M);
 
@@ -682,38 +655,19 @@ namespace app::sha::v512 {
     digest[7] += h;
   }
 
-  export Hash hash(std::istream& istream) {
-    Digest digest{0x6a09e667f3bcc908, 0xbb67ae8584caa73b,
-                  0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-                  0x510e527fade682d1, 0x9b05688c2b3e6c1f,
-                  0x1f83d9abfb41bd6b, 0x5be0cd19137e2179};
+  constexpr void digest(Digest& digest) {
+    digest[0] = 0x6a09e667f3bcc908;
+    digest[1] = 0xbb67ae8584caa73b;
+    digest[2] = 0x3c6ef372fe94f82b;
+    digest[3] = 0xa54ff53a5f1d36f1;
+    digest[4] = 0x510e527fade682d1;
+    digest[5] = 0x9b05688c2b3e6c1f;
+    digest[6] = 0x1f83d9abfb41bd6b;
+    digest[7] = 0x5be0cd19137e2179;
+  }
 
-    Message M;
-    Message P; // second message, when padding goes over one
-    uint128_t total = 0;
-
-    while (istream) {
-      istream.read((char *)M, 1024 / CHAR_BIT);
-      const uint128_t bits = istream.gcount() * CHAR_BIT;
-      total += bits;
-
-      if (bits == 1024) {
-        update(digest, M);
-        continue;
-      }
-
-      if (bits <= 895)
-        pad(M, bits, total);
-      else
-        pad(M, P, bits, total);
-
-      update(digest, M);
-
-      if (895 < bits)
-        update(digest, P);
-    }
-
-    return digest;
+  export Hash hash(std::istream& input) {
+    return sha::hash<Hash, Digest, Message, uint128_t, digest, update>(input);
   }
 
   export Hash hash(std::istream&& istream) {
