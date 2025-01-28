@@ -102,6 +102,25 @@ namespace app::sha {
       return is;
     }
   };
+
+  template <class M_t, class U>
+  constexpr void pad(M_t& M, U bits, U total) {
+    constexpr size_t M_bits = sizeof(M_t) * CHAR_BIT;
+    constexpr size_t U_bits = sizeof(U) * CHAR_BIT;
+    bits::reset(M, bits, M_bits - 1 - U_bits);
+    ((char*)M)[bits / CHAR_BIT] = 0x80;
+    ((U*)M)[M_bits / U_bits - 1] = std::byteswap(total);
+  }
+
+  template <class M_t, class U>
+  constexpr void pad(M_t& M, M_t& P, U bits, U total) {
+    constexpr size_t M_bits = sizeof(M_t) * CHAR_BIT;
+    constexpr size_t U_bits = sizeof(U) * CHAR_BIT;
+    bits::reset(M, bits, M_bits - 1);
+    bits::reset(P, 0, M_bits - 1 - U_bits);
+    ((char*)M)[bits / CHAR_BIT] = 0x80;
+    ((U*)P)[M_bits / U_bits - 1] = std::byteswap(total);
+  }
 }
 
 namespace app::sha::v1 {
@@ -171,19 +190,6 @@ namespace app::sha::v1 {
     digest[2] += c;
     digest[3] += d;
     digest[4] += e;
-  }
-
-  constexpr void pad(Message& M, uint64_t bits, uint64_t total) {
-    bits::reset(M, bits, 511 - 64);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint64_t*)M)[512 / 64 - 1] = std::byteswap(total);
-  }
-
-  constexpr void pad(Message& M, Message P, uint64_t bits, uint64_t total) {
-    bits::reset(M, bits, 511);
-    bits::reset(P, 0, 511 - 64);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint64_t*)P)[512 / 64 - 1] = std::byteswap(total);
   }
 
   export Hash hash(std::istream& istream) {
@@ -308,19 +314,6 @@ namespace app::sha::v224 {
     digest[7] += h;
   }
 
-  constexpr void pad(Message& M, uint64_t bits, uint64_t total) {
-    bits::reset(M, bits, 511 - 64);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint64_t*)M)[512 / 64 - 1] = std::byteswap(total);
-  }
-
-  constexpr void pad(Message& M, Message P, uint64_t bits, uint64_t total) {
-    bits::reset(M, bits, 511);
-    bits::reset(P, 0, 511 - 64);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint64_t*)P)[512 / 64 - 1] = std::byteswap(total);
-  }
-
   export Hash hash(std::istream& istream) {
     Digest digest{0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939, 0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4};
 
@@ -441,19 +434,6 @@ namespace app::sha::v256 {
     digest[5] += f;
     digest[6] += g;
     digest[7] += h;
-  }
-
-  constexpr void pad(Message& M, uint64_t bits, uint64_t total) {
-    bits::reset(M, bits, 511 - 64);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint64_t*)M)[512 / 64 - 1] = std::byteswap(total);
-  }
-
-  constexpr void pad(Message& M, Message P, uint64_t bits, uint64_t total) {
-    bits::reset(M, bits, 511);
-    bits::reset(P, 0, 511 - 64);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint64_t*)P)[512 / 64 - 1] = std::byteswap(total);
   }
 
   export Hash hash(std::istream& istream) {
@@ -590,19 +570,6 @@ namespace app::sha::v384 {
     digest[5] += f;
     digest[6] += g;
     digest[7] += h;
-  }
-
-  constexpr void pad(Message& M, uint128_t bits, uint128_t total) {
-    bits::reset(M, bits, 1023 - 128);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint128_t*)M)[1024 / 128 - 1] = std::byteswap(total);
-  }
-
-  constexpr void pad(Message& M, Message P, uint128_t bits, uint128_t total) {
-    bits::reset(M, bits, 1023);
-    bits::reset(P, 0, 1023 - 128);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint128_t*)P)[1024 / 128 - 1] = std::byteswap(total);
   }
 
   export Hash hash(std::istream& istream) {
@@ -742,19 +709,6 @@ namespace app::sha::v512 {
     digest[5] += f;
     digest[6] += g;
     digest[7] += h;
-  }
-
-  constexpr void pad(Message& M, uint128_t bits, uint128_t total) {
-    bits::reset(M, bits, 1023 - 128);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint128_t*)M)[1024 / 128 - 1] = std::byteswap(total);
-  }
-
-  constexpr void pad(Message& M, Message P, uint128_t bits, uint128_t total) {
-    bits::reset(M, bits, 1023);
-    bits::reset(P, 0, 1023 - 128);
-    ((char*)M)[bits / CHAR_BIT] = 0x80;
-    ((uint128_t*)P)[1024 / 128 - 1] = std::byteswap(total);
   }
 
   export Hash hash(std::istream& istream) {
