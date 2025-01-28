@@ -618,3 +618,31 @@ namespace app::sha::v512_224 {
     return hash(istream);
   }
 }
+
+namespace app::sha::v512_256 {
+  using Digest = uint64_t[8];
+  using Message = uint64_t[16];
+  using Schedule = uint64_t[80];
+  using Hash = sha::Hash<Digest, 4>;
+
+  using namespace sha::v384::functions;
+
+  constexpr void digest(Digest& digest) {
+    digest[0] = 0x22312194fc2bf72c;
+    digest[1] = 0x9f555fa3c84c64c2;
+    digest[2] = 0x2393b86b6f53b151;
+    digest[3] = 0x963877195940eabd;
+    digest[4] = 0x96283ee2a88effe3;
+    digest[5] = 0xbe5e1e2553863992;
+    digest[6] = 0x2b0199fc2c85b8aa;
+    digest[7] = 0x0eb72ddc81c52ca2;
+  }
+
+  export Hash hash(std::istream& input) {
+    return sha::hash<Hash, Digest, Message, uint128_t, digest, update>(input);
+  }
+
+  export Hash hash(std::istream&& istream) {
+    return hash(istream);
+  }
+}
