@@ -103,6 +103,21 @@ namespace app::sha {
     }
   };
 
+  template <class U>
+  constexpr U ch(U x, U y, U z) {
+    return (x & y) ^ (~x & z);
+  }
+
+  template <class U>
+  constexpr U parity(U x, U y, U z) {
+    return x ^ y ^ z;
+  }
+
+  template <class U>
+  constexpr U maj(U x, U y, U z) {
+    return (x & y) ^ (x & z) ^ (y & z);
+  }
+
   template <class M_t, class U>
   constexpr void pad(M_t& M, U bits, U total) {
     constexpr size_t M_bits = sizeof(M_t) * CHAR_BIT;
@@ -128,18 +143,6 @@ namespace app::sha::v1 {
   using Schedule = uint32_t[80];
   using Message = uint32_t[16];
   using Hash = sha::Hash<Digest, 5>;
-
-  constexpr uint32_t ch(uint32_t x, uint32_t y, uint32_t z) {
-    return (x & y) ^ (~x & z);
-  }
-
-  constexpr uint32_t parity(uint32_t x, uint32_t y, uint32_t z) {
-    return x ^ y ^ z;
-  }
-
-  constexpr uint32_t maj(uint32_t x, uint32_t y, uint32_t z) {
-    return (x & y) ^ (x & z) ^ (y & z);
-  }
 
   constexpr uint32_t ft(int t, uint32_t x, uint32_t y, uint32_t z) {
     switch (t) {
@@ -233,14 +236,6 @@ namespace app::sha::v224 {
   using Message = uint32_t[16];
   using Schedule = uint32_t[64];
   using Hash = sha::Hash<Digest, 7>;
-
-  constexpr uint32_t ch(uint32_t x, uint32_t y, uint32_t z) {
-    return (x & y) ^ (~x & z);
-  }
-
-  constexpr uint32_t maj(uint32_t x, uint32_t y, uint32_t z) {
-    return (x & y) ^ (x & z) ^ (y & z);
-  }
 
   constexpr uint32_t S0(uint32_t x) {
     return std::rotr(x, 2) ^ std::rotr(x, 13) ^ std::rotr(x, 22);
@@ -356,14 +351,6 @@ namespace app::sha::v256 {
   using Schedule = uint32_t[64];
   using Hash = sha::Hash<Digest, 8>;
 
-  constexpr uint32_t ch(uint32_t x, uint32_t y, uint32_t z) {
-    return (x & y) ^ (~x & z);
-  }
-
-  constexpr uint32_t maj(uint32_t x, uint32_t y, uint32_t z) {
-    return (x & y) ^ (x & z) ^ (y & z);
-  }
-
   constexpr uint32_t S0(uint32_t x) {
     return std::rotr(x, 2) ^ std::rotr(x, 13) ^ std::rotr(x, 22);
   }
@@ -477,14 +464,6 @@ namespace app::sha::v384 {
   using Message = uint64_t[16];
   using Schedule = uint64_t[80];
   using Hash = sha::Hash<Digest, 6>;
-
-  constexpr uint64_t ch(uint64_t x, uint64_t y, uint64_t z) {
-    return (x & y) ^ (~x & z);
-  }
-
-  constexpr uint64_t maj(uint64_t x, uint64_t y, uint64_t z) {
-    return (x & y) ^ (x & z) ^ (y & z);
-  }
 
   constexpr uint64_t S0(uint64_t x) {
     return std::rotr(x, 28) ^ std::rotr(x, 34) ^ std::rotr(x, 39);
@@ -616,14 +595,6 @@ namespace app::sha::v512 {
   using Message = uint64_t[16];
   using Schedule = uint64_t[80];
   using Hash = sha::Hash<Digest, 8>;
-
-  constexpr uint64_t ch(uint64_t x, uint64_t y, uint64_t z) {
-    return (x & y) ^ (~x & z);
-  }
-
-  constexpr uint64_t maj(uint64_t x, uint64_t y, uint64_t z) {
-    return (x & y) ^ (x & z) ^ (y & z);
-  }
 
   constexpr uint64_t S0(uint64_t x) {
     return std::rotr(x, 28) ^ std::rotr(x, 34) ^ std::rotr(x, 39);
