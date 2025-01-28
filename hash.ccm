@@ -61,77 +61,57 @@ namespace app::sha {
     return std::invalid_argument{"t (" + std::to_string(t) + ") out of range [0, 80]"};
   }
 
-  export template <class D, size_t N_bits>
+  export template <class D, size_t B>
   struct Hash : public std::array<std::remove_extent_t<D>,
-                                  (N_bits / (sizeof(std::remove_extent_t<D>) * CHAR_BIT)
-                                   + (N_bits % (sizeof(std::remove_extent_t<D>) * CHAR_BIT)
-                                      ? 1
-                                      : 0))> {
-    using type = std::remove_extent_t<D>;
-    constexpr static size_t type_bits = sizeof(type) * CHAR_BIT;
-    constexpr static size_t N = (N_bits / type_bits + (N_bits % type_bits ? 1 : 0));
+                                  (B / (sizeof(std::remove_extent_t<D>) * CHAR_BIT)
+                                   + (B % (sizeof(std::remove_extent_t<D>) * CHAR_BIT) != 0))> {
+    using T = std::remove_extent_t<D>;
+    constexpr static size_t T_bits = sizeof(T) * CHAR_BIT;
+    constexpr static size_t N = (B / T_bits + (B % T_bits != 0));
 
     Hash() = default;
 
     Hash(const D& digest) {
       std::copy(digest, digest + N, std::begin(*this));
+      const size_t shift = std::max(N * T_bits, B) - B;
+      this->back() >>= shift;
+      this->back() <<= shift;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const Hash<D, N_bits>& hash) {
+    friend std::ostream& operator<<(std::ostream& os, const Hash<D, B>& hash) {
       auto flags = os.flags();
       os << std::hex;
-      size_t total = 0;
-      for (const auto& value : hash) {
-        total += type_bits;
 
-        size_t shift, w;
-        if (total < N_bits) {
-          shift = 0;
-          w = sizeof(type) * 2;
-        } else {
-          shift = total - N_bits;
-          w = (type_bits - (total - N_bits)) / 4;
-        }
-
+      for (int i = 0; i < N; i++) {
+        const auto value = hash[i];
+        const size_t shift = std::max((i + 1) * T_bits, B) - B;
+        const size_t w = (T_bits - shift) / 4;
         os  << std::setw(w)
             << std::setfill('0')
             << (value >> shift);
       }
+
       os.flags(flags);
       return os;
     }
 
-    friend std::istream& operator>>(std::istream& is, Hash<D, N_bits>& hash) {
+    friend std::istream& operator>>(std::istream& is, Hash<D, B>& hash) {
       istream::Fail fail{is};
       auto flags = is.flags();
-      size_t total = 0;
-      for (auto& value : hash) {
-        total += type_bits;
 
-        size_t shift, w;
-        if (total < N_bits) {
-          shift = 0;
-          w = sizeof(type) * 2;
-        } else {
-          shift = total - N_bits;
-          w = (type_bits - (total - N_bits)) / 4;
-        }
-
-        std::string str;
-        is >> std::setw(w) >> str;
-
-        if (!is)
+      std::string buffer;
+      for (int i = 0; i < N; i++) {
+        auto& value = hash[i];
+        const size_t shift = std::max((i + 1) * T_bits, B) - B;
+        const size_t w = (T_bits - shift) / 4;
+        is >> std::setw(w) >> buffer;
+        std::istringstream is_buffer{buffer};
+        is_buffer >> std::hex >> value;
+        if (is_buffer.fail())
           return fail();
-
-        std::istringstream istr{str};
-
-        istr >> std::hex >> value;
-
         value <<= shift;
-
-        if (istr.fail())
-          return fail();
       }
+
       is.flags(flags);
       return is;
     }
