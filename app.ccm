@@ -9,8 +9,8 @@ module;
 #include "project.hh"
 
 export module App;
+export import :hash;
 import :options;
-import :hash;
 
 namespace app {
   namespace fs = std::filesystem;

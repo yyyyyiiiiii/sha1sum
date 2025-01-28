@@ -1,5 +1,6 @@
 module;
 
+#include <type_traits> 
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
@@ -58,55 +59,56 @@ namespace app::sha {
   std::invalid_argument bad_t(int t) {
     return std::invalid_argument{"t (" + std::to_string(t) + ") out of range [0, 80]"};
   }
+
+  export template <class D, size_t N>
+  struct Hash : public std::array<std::remove_extent_t<D>, N> {
+    using type = std::remove_extent_t<D>;
+
+    Hash() = default;
+
+    Hash(const D& digest) {
+      std::copy(digest, digest + N, std::begin(*this));
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Hash<D, N>& hash) {
+      auto flags = os.flags();
+      os << std::hex;
+      for (const auto& value : hash)
+        os  << std::setw(sizeof(type) * 2)
+            << std::setfill('0')
+            << value;
+      os.flags(flags);
+      return os;
+    }
+
+    friend std::istream& operator>>(std::istream& is, Hash<D, N>& hash) {
+      istream::Fail fail{is};
+      auto flags = is.flags();
+      for (auto& value : hash) {
+        std::string str;
+        is >> std::setw(sizeof(type) * 2) >> str;
+
+        if (!is)
+          return fail();
+
+        std::istringstream istr{str};
+
+        istr >> std::hex >> value;
+
+        if (istr.fail())
+          return fail();
+      }
+      is.flags(flags);
+      return is;
+    }
+  };
 }
 
 namespace app::sha::v1 {
   using Digest = uint32_t[5];
   using Schedule = uint32_t[80];
   using Message = uint32_t[16];
-
-  struct Hash : public std::array<uint32_t, 5> {
-    Hash() = default;
-
-    Hash(const Digest& digest) {
-      std::copy(std::begin(digest), std::end(digest), std::begin(*this));
-    }
-
-    friend std::ostream& operator<<(std::ostream&, const Hash&);
-    friend std::istream& operator>>(std::istream&, Hash&);
-  };
-
-  std::ostream& operator<<(std::ostream& os, const Hash& hash) {
-    auto flags = os.flags();
-    os << std::hex;
-    for (const auto& value : hash)
-      os  << std::setw(8)
-          << std::setfill('0')
-          << value;
-    os.flags(flags);
-    return os;
-  }
-
-  std::istream& operator>>(std::istream& is, Hash& hash) {
-    istream::Fail fail{is};
-    auto flags = is.flags();
-    for (auto& value : hash) {
-      std::string str;
-      is >> std::setw(8) >> str;
-
-      if (!is)
-        return fail();
-
-      std::istringstream istr{str};
-
-      istr >> std::hex >> value;
-
-      if (istr.fail())
-        return fail();
-    }
-    is.flags(flags);
-    return is;
-  }
+  using Hash = sha::Hash<Digest, 5>;
 
   constexpr uint32_t ch(uint32_t x, uint32_t y, uint32_t z) {
     return (x & y) ^ (~x & z);
@@ -224,49 +226,7 @@ namespace app::sha::v224 {
   using Digest = uint32_t[8];
   using Message = uint32_t[16];
   using Schedule = uint32_t[64];
-
-  struct Hash : public std::array<uint32_t, 7> {
-    Hash() = default;
-
-    Hash(const Digest& digest) {
-      std::copy(std::begin(digest), std::prev(std::end(digest)), std::begin(*this));
-    }
-
-    friend std::ostream& operator<<(std::ostream&, const Hash&);
-    friend std::istream& operator>>(std::istream&, Hash&);
-  };
-
-  std::ostream& operator<<(std::ostream& os, const Hash& hash) {
-    auto flags = os.flags();
-    os << std::hex;
-    for (const auto& value : hash)
-      os  << std::setw(8)
-          << std::setfill('0')
-          << value;
-    os.flags(flags);
-    return os;
-  }
-
-  std::istream& operator>>(std::istream& is, Hash& hash) {
-    istream::Fail fail{is};
-    auto flags = is.flags();
-    for (auto& value : hash) {
-      std::string str;
-      is >> std::setw(8) >> str;
-
-      if (!is)
-        return fail();
-
-      std::istringstream istr{str};
-
-      istr >> std::hex >> value;
-
-      if (istr.fail())
-        return fail();
-    }
-    is.flags(flags);
-    return is;
-  }
+  using Hash = sha::Hash<Digest, 7>;
 
   constexpr uint32_t ch(uint32_t x, uint32_t y, uint32_t z) {
     return (x & y) ^ (~x & z);
@@ -401,49 +361,7 @@ namespace app::sha::v256 {
   using Digest = uint32_t[8];
   using Message = uint32_t[16];
   using Schedule = uint32_t[64];
-
-  struct Hash : public std::array<uint32_t, 8> {
-    Hash() = default;
-
-    Hash(const Digest& digest) {
-      std::copy(std::begin(digest), std::end(digest), std::begin(*this));
-    }
-
-    friend std::ostream& operator<<(std::ostream&, const Hash&);
-    friend std::istream& operator>>(std::istream&, Hash&);
-  };
-
-  std::ostream& operator<<(std::ostream& os, const Hash& hash) {
-    auto flags = os.flags();
-    os << std::hex;
-    for (const auto& value : hash)
-      os  << std::setw(8)
-          << std::setfill('0')
-          << value;
-    os.flags(flags);
-    return os;
-  }
-
-  std::istream& operator>>(std::istream& is, Hash& hash) {
-    istream::Fail fail{is};
-    auto flags = is.flags();
-    for (auto& value : hash) {
-      std::string str;
-      is >> std::setw(8) >> str;
-
-      if (!is)
-        return fail();
-
-      std::istringstream istr{str};
-
-      istr >> std::hex >> value;
-
-      if (istr.fail())
-        return fail();
-    }
-    is.flags(flags);
-    return is;
-  }
+  using Hash = sha::Hash<Digest, 8>;
 
   constexpr uint32_t ch(uint32_t x, uint32_t y, uint32_t z) {
     return (x & y) ^ (~x & z);
@@ -578,49 +496,7 @@ namespace app::sha::v384 {
   using Digest = uint64_t[8];
   using Message = uint64_t[16];
   using Schedule = uint64_t[80];
-
-  struct Hash : public std::array<uint64_t, 6> {
-    Hash() = default;
-
-    Hash(const Digest& digest) {
-      std::copy(std::begin(digest), digest + 6, std::begin(*this));
-    }
-
-    friend std::ostream& operator<<(std::ostream&, const Hash&);
-    friend std::istream& operator>>(std::istream&, Hash&);
-  };
-
-  std::ostream& operator<<(std::ostream& os, const Hash& hash) {
-    auto flags = os.flags();
-    os << std::hex;
-    for (const auto& value : hash)
-      os  << std::setw(16)
-          << std::setfill('0')
-          << value;
-    os.flags(flags);
-    return os;
-  }
-
-  std::istream& operator>>(std::istream& is, Hash& hash) {
-    istream::Fail fail{is};
-    auto flags = is.flags();
-    for (auto& value : hash) {
-      std::string str;
-      is >> std::setw(16) >> str;
-
-      if (!is)
-        return fail();
-
-      std::istringstream istr{str};
-
-      istr >> std::hex >> value;
-
-      if (istr.fail())
-        return fail();
-    }
-    is.flags(flags);
-    return is;
-  }
+  using Hash = sha::Hash<Digest, 6>;
 
   constexpr uint64_t ch(uint64_t x, uint64_t y, uint64_t z) {
     return (x & y) ^ (~x & z);
@@ -772,49 +648,7 @@ namespace app::sha::v512 {
   using Digest = uint64_t[8];
   using Message = uint64_t[16];
   using Schedule = uint64_t[80];
-
-  struct Hash : public std::array<uint64_t, 8> {
-    Hash() = default;
-
-    Hash(const Digest& digest) {
-      std::copy(std::begin(digest), digest + 8, std::begin(*this));
-    }
-
-    friend std::ostream& operator<<(std::ostream&, const Hash&);
-    friend std::istream& operator>>(std::istream&, Hash&);
-  };
-
-  std::ostream& operator<<(std::ostream& os, const Hash& hash) {
-    auto flags = os.flags();
-    os << std::hex;
-    for (const auto& value : hash)
-      os  << std::setw(16)
-          << std::setfill('0')
-          << value;
-    os.flags(flags);
-    return os;
-  }
-
-  std::istream& operator>>(std::istream& is, Hash& hash) {
-    istream::Fail fail{is};
-    auto flags = is.flags();
-    for (auto& value : hash) {
-      std::string str;
-      is >> std::setw(16) >> str;
-
-      if (!is)
-        return fail();
-
-      std::istringstream istr{str};
-
-      istr >> std::hex >> value;
-
-      if (istr.fail())
-        return fail();
-    }
-    is.flags(flags);
-    return is;
-  }
+  using Hash = sha::Hash<Digest, 8>;
 
   constexpr uint64_t ch(uint64_t x, uint64_t y, uint64_t z) {
     return (x & y) ^ (~x & z);
