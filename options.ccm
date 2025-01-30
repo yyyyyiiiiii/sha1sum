@@ -10,10 +10,37 @@ import :project;
 import :istream;
 
 namespace app {
-  export enum class Mode {kBinary, kText};
+  export enum Mode {kBinary, kText};
   export enum Standard {k1, k224, k256, k512, k512_224, k512_256};
 
   constexpr size_t kStandardsCount = k512_256 + 1;
+
+  static std::istream& operator>>(std::istream& input, Mode& mode) {
+    istream::Fail fail{input};
+
+    std::string buffer;
+    input >> buffer;
+
+    struct {std::string string; Mode value;} modes[] = {
+      {"text", kText}, {"binary", kBinary}
+    };
+
+    for (auto&& [string, value] : modes) {
+      if (string.contains(buffer)) {
+        mode = value;
+        return input;
+      }
+    }
+
+    fail();
+
+    return input;
+  }
+
+  static std::ostream& operator<<(std::ostream& output, const Mode& mode) {
+    output << (mode == kBinary ? "binary" : "text");
+    return output;
+  }
 
   std::string sha512xbits(std::istream& input) {
     istream::Reset reset{input};
@@ -92,18 +119,18 @@ namespace app {
       .show_positional_help()
       .set_width(70)
       .add_options()
-      ("b,binary", "read in binary mode")
+      ("m,mode", "read in [text, binary] mode",
+       cxxopts::value<Mode>()->default_value("text"))
       ("c,check", "read checksums from the FILEs and check them")
       ("tag", "create a BSD-style checksum")
-      ("t,text", "read in text mode (default)")
       ("z,zero", "end each output line with NUL, not newline, and disable file name escaping")
       ("s,std", "use SHA-[1, 224, 256, 512, 512/224, 512/256] standard",
        cxxopts::value<Standard>()->default_value("1"))
       ("help", "display this help and exit")
       ("version", "output version information and exit")
-      ("FILEs", "FILEs used to evaluate the hashes", cxxopts::value<std::vector<std::string>>());
+      ("files", "files used to evaluate the hashes", cxxopts::value<std::vector<std::string>>());
 
-    parser.parse_positional({"FILEs"});
+    parser.parse_positional({"files"});
 
     cxxopts::ParseResult map;
     try {
@@ -125,17 +152,17 @@ namespace app {
       return options;
     }
 
-    if (map.count("FILEs"))
-      options.filenames = map["FILEs"].as<std::vector<std::string>>();
+    if (map.count("files"))
+      options.filenames = map["files"].as<std::vector<std::string>>();
 
     for (auto&& filename : options.filenames) {
       if (!std::ifstream{filename}.good()) {
-        std::cerr << project::kName << ": bad FILE '" << filename << "'" << std::endl;
+        std::cerr << project::kName << ": bad file '" << filename << "'" << std::endl;
         return options;
       }
     }
 
-    options.mode = map.count("binary") ? Mode::kBinary : Mode::kText;
+    options.mode = map["mode"].as<Mode>();
     options.check = map.count("check");
     options.tag = map.count("tag");
     options.zero = map.count("zero");
