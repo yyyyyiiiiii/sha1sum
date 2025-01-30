@@ -6,8 +6,6 @@ module;
 #include <fstream>
 #include <sstream>
 
-#include "project.hh"
-
 export module App;
 export import :hash;
 import :options;

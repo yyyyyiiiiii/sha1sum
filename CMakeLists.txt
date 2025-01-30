@@ -1,12 +1,9 @@
 cmake_minimum_required(VERSION 3.28.0)
 
-project(sha1sum LANGUAGES CXX DESCRIPTION "Print or check SHA1 (160-bit) checksums." VERSION 0.0.0)
+project(shasum LANGUAGES CXX DESCRIPTION "Print or check SHA checksums." VERSION 0.0.0)
 
 option(BUILD_TEST "Build the test" OFF)
 option(CMAKE_BUILD_TYPE "Build type: [Debug, Release]" Release)
-
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(CMAKE_BUILD_TYPE STREQUAL Debug)
   set(FETCHCONTENT_QUIET FALSE)
@@ -32,9 +29,10 @@ if (NOT cxxopts_FOUND)
   FetchContent_MakeAvailable(cxxopts)
 endif()
 
-set(PROJECT_HH_PREFIX ".project_hh_prefix")
-set(PROJECT_HH_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_HH_PREFIX}")
-configure_file(project.hh.in "${PROJECT_HH_PREFIX}/project.hh" @ONLY)
+set(PROJECT_ccm_PREFIX ".project_ccm_prefix")
+set(PROJECT_ccm_DIR "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_ccm_PREFIX}")
+set(PROJECT_ccm_PATH "${PROJECT_ccm_DIR}/project.ccm")
+configure_file(project.ccm.in "${PROJECT_ccm_PATH}" @ONLY)
 
 add_executable(${PROJECT_NAME})
 target_sources(
@@ -44,6 +42,8 @@ target_sources(
   app.ccm
   options.ccm
   hash.ccm
+  istream.ccm
+  "${PROJECT_ccm_PATH}"
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE cxxopts::cxxopts)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)

@@ -5,12 +5,71 @@ module;
 
 #include <cxxopts.hpp>
 
-#include "project.hh"
-
 export module App:options;
+import :project;
+import :istream;
 
 namespace app {
   export enum class Mode {kBinary, kText};
+  export enum Standard {k1, k224, k256, k512, k512_224, k512_256};
+
+  constexpr size_t kStandardsCount = k512_256 + 1;
+
+  std::string sha512xbits(std::istream& input) {
+    istream::Reset reset{input};
+
+    std::string buffer;
+    input >> buffer;
+
+    if (buffer.empty() || buffer.front() != '/') {
+      reset();
+      input.clear();
+      return "";
+    }
+
+    if (buffer == "/") {
+      input >> buffer;
+      return "/" + buffer;
+    }
+
+    std::erase_if(buffer, isspace);
+    return buffer;
+  }
+
+  export std::istream& operator>>(std::istream& input, Standard& std) {
+    std::map<std::string, Standard> map{{"1", k1},
+                                        {"224", k224},
+                                        {"256", k256},
+                                        {"512", k512},
+                                        {"512/224", k512_224},
+                                        {"512/256", k512_256}};
+    istream::Fail fail{input};
+    std::string key;
+    input >> key;
+
+    if (key == "512")
+      key += sha512xbits(input);
+
+    if (!map.contains(key))
+      return fail();
+
+    std = map[key];
+
+    return input;
+  }
+
+  export std::ostream& operator<<(std::ostream& output, const Standard& std) {
+    const char* array[kStandardsCount];
+    array[k1] = "1";
+    array[k224] = "224";
+    array[k256] = "256";
+    array[k512] = "512";
+    array[k512_224] = "512/224";
+    array[k512_256] = "512/256";
+
+    output << array[std];
+    return output;
+  }
 
   export struct Options {
     bool success;
@@ -19,6 +78,7 @@ namespace app {
     std::vector<std::string> filenames;
 
     Mode mode;
+    Standard standard;
     bool check;
     bool tag;
     bool zero;
@@ -27,7 +87,7 @@ namespace app {
   export Options parse(int argc, char* argv[]) {
     Options options{.success = false, .ignore = true};
 
-    cxxopts::Options parser(kProjectName, kProjectDescription);
+    cxxopts::Options parser(project::kName, project::kDescription);
     parser
       .show_positional_help()
       .set_width(70)
@@ -37,6 +97,8 @@ namespace app {
       ("tag", "create a BSD-style checksum")
       ("t,text", "read in text mode (default)")
       ("z,zero", "end each output line with NUL, not newline, and disable file name escaping")
+      ("s,std", "use SHA-[1, 224, 256, 512, 512/224, 512/256] standard",
+       cxxopts::value<Standard>()->default_value("1"))
       ("help", "display this help and exit")
       ("version", "output version information and exit")
       ("FILEs", "FILEs used to evaluate the hashes", cxxopts::value<std::vector<std::string>>());
@@ -47,7 +109,7 @@ namespace app {
     try {
       map = parser.parse(argc, argv);
     } catch (std::exception& e) {
-      std::cerr << kProjectName << ": " << e.what() << std::endl;
+      std::cerr << project::kName << ": " << e.what() << std::endl;
       return options;
     }
 
@@ -58,7 +120,7 @@ namespace app {
     }
 
     if (map.count("version")) {
-      std::cout << kVersion << std::endl;
+      std::cout << project::kName << " " << project::kVersion << std::endl;
       options.success = true;
       return options;
     }
@@ -68,7 +130,7 @@ namespace app {
 
     for (auto&& filename : options.filenames) {
       if (!std::ifstream{filename}.good()) {
-        std::cerr << kProjectName << ": bad FILE '" << filename << "'" << std::endl;
+        std::cerr << project::kName << ": bad FILE '" << filename << "'" << std::endl;
         return options;
       }
     }
@@ -77,6 +139,7 @@ namespace app {
     options.check = map.count("check");
     options.tag = map.count("tag");
     options.zero = map.count("zero");
+    options.standard = map["std"].as<Standard>();
 
     options.ignore = false;
 

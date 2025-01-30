@@ -4,8 +4,6 @@ module;
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
-#include <ranges>
-#include <span>
 #include <bit>
 
 #include <sstream>
@@ -15,26 +13,7 @@ module;
 #include <cstdint>
 
 export module App:hash;
-
-namespace app::istream {
-  export struct Fail {
-    Fail(std::istream& is)
-      : is{is}, g{is.tellg()}, flags{is.flags()}, state{is.rdstate()} {}
-
-    std::istream& operator()() {
-      is.clear();
-      is.seekg(g, is.beg);
-      is.flags(flags);
-      is.setstate(state | std::ios_base::failbit);
-      return is;
-    }
-
-    std::ios::iostate state;
-    std::ios_base::fmtflags flags;
-    std::streampos g;
-    std::istream& is;
-  };
-}
+import :istream;
 
 static_assert(CHAR_BIT == 8);
 static_assert(std::endian::native == std::endian::little);

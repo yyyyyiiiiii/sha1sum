@@ -1,0 +1,42 @@
+module;
+
+#include <istream>
+
+export module App:istream;
+
+namespace app::istream {
+  export struct Reset {
+    Reset(std::istream& is)
+      : is{is} {
+      state = is.rdstate();
+      flags = is.flags();
+      if (!(state & std::ios_base::eofbit))
+        g = is.tellg();
+    }
+
+    std::istream& operator()() {
+      is.clear();
+      if (!(state & std::ios_base::eofbit))
+        is.seekg(g, is.beg);
+      is.flags(flags);
+      is.setstate(state);
+      return is;
+    }
+
+    std::ios::iostate state;
+    std::ios_base::fmtflags flags;
+    std::streampos g;
+    std::istream& is;
+  };
+
+  export struct Fail : public Reset {
+    Fail(std::istream& is)
+      : Reset{is} {}
+
+    std::istream& operator()() {
+      Reset::operator()();
+      is.setstate(state | std::ios_base::failbit);
+      return is;
+    }
+  };
+}

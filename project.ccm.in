@@ -1,0 +1,9 @@
+module;
+
+export module App:project;
+
+export namespace app::project {
+  constexpr char kName[] = "@PROJECT_NAME@";
+  constexpr char kDescription[] = "@PROJECT_DESCRIPTION@";
+  constexpr char kVersion[] = "@PROJECT_VERSION@";
+}
