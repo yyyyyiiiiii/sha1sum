@@ -107,22 +107,6 @@ namespace app {
     return is;
   }
 
-  int print(Options& options) {
-    const bool binary = options.mode == Mode::kBinary;
-    const bool zero = options.zero;
-    const bool tag = options.tag;
-    const std::ios_base::openmode openmode = (binary || tag
-                                              ? std::ios_base::in | std::ios_base::binary
-                                              : std::ios_base::in);
-
-    for (auto& filename : options.filenames) {
-      const auto& hash = sha::v1::hash(std::ifstream{filename, openmode});
-      std::cout << Hash{hash, filename, tag, openmode, zero ? '\0' : '\n'};
-    }
-
-    return 0;
-  }
-
   int verify(Options& options) {
     for (auto& filename : options.filenames) {
       std::ifstream input{filename};
@@ -152,6 +136,165 @@ namespace app {
       }
     }
     return 0;
+  }
+
+  template <Standard>
+  struct SHA;
+
+  template <>
+  struct SHA<k1> {
+    using Hash = sha::v1::Hash;
+    constexpr static Standard std = k1;
+    constexpr static auto function = [](auto&&... args) { return sha::v1::hash(args...); };
+  };
+
+  template <>
+  struct SHA<k224> {
+    using Hash = sha::v224::Hash;
+    constexpr static Standard std = k224;
+    constexpr static auto function = [](auto&&... args) { return sha::v224::hash(args...); };
+  };
+
+  template <>
+  struct SHA<k256> {
+    using Hash = sha::v256::Hash;
+    constexpr static Standard std = k256;
+    constexpr static auto function = [](auto&&... args) { return sha::v256::hash(args...); };
+  };
+
+  template <>
+  struct SHA<k384> {
+    using Hash = sha::v384::Hash;
+    constexpr static Standard std = k384;
+    constexpr static auto function = [](auto&&... args) { return sha::v384::hash(args...); };
+  };
+
+  template <>
+  struct SHA<k512> {
+    using Hash = sha::v512::Hash;
+    constexpr static Standard std = k512;
+    constexpr static auto function = [](auto&&... args) { return sha::v512::hash(args...); };
+  };
+
+  template <>
+  struct SHA<k512_224> {
+    using Hash = sha::v512_224::Hash;
+    constexpr static Standard std = k512_224;
+    constexpr static auto function = [](auto&&... args) { return sha::v512_224::hash(args...); };
+  };
+
+  template <>
+  struct SHA<k512_256> {
+    using Hash = sha::v512_256::Hash;
+    constexpr static Standard std = k512_256;
+    constexpr static auto function = [](auto&&... args) { return sha::v512_256::hash(args...); };
+  };
+
+  template <Standard std>
+  struct Format {
+    Format(const SHA<std>::Hash& hash,
+           const std::string& file,
+           bool tag,
+           const Mode& mode,
+           char ending)
+      : hash{hash},
+        file{file},
+        tag{tag},
+        mode{mode},
+        ending{ending} {}
+
+    friend std::ostream& operator<<(std::ostream& output, const Format<std>& format) {
+      auto& hash = format.hash;
+      auto& file = format.file;
+      bool tag = format.tag;
+      auto& mode = format.mode;
+      char ending = format.ending;
+      if (!tag)
+        output << hash
+               << (mode == kBinary ? " *" : "  ") << file
+               << ending;
+      else
+        output << "SHA" << std
+               << " (" << file << ") = "
+               << hash
+               << ending;
+      return output;
+    }
+
+    friend std::istream& operator>>(std::istream& input, Format<std>& format) {
+      istream::Fail fail{input};
+
+      auto& hash = format.hash;
+      auto& file = format.file;
+      auto& tag = format.tag;
+      auto& mode = format.mode;
+      auto& ending = format.ending;
+
+      std::string buffer;
+
+      if (input >> buffer, buffer.empty()) return fail();
+
+      tag = buffer == "SHA" + to_string(std);
+      if (tag) {
+        mode = kBinary;
+        if (input >> file,
+            file.empty()
+            || (file.front() != '(' || file.back() != ')')) return fail();
+
+        file.erase(file.begin());
+        file.erase(file.end());
+
+        if (input >> buffer,
+            buffer.empty() || buffer != "=") return fail();
+        if (input >> hash, input.fail()) return fail();
+      } else {
+        std::istringstream hash_input{buffer};
+        if (hash_input >> hash, hash_input.fail()) return fail();
+        if (input >> file, file.empty()) return fail();
+        mode = file.front() == '*' && !fs::exists(file) ? kBinary : kText;
+        if (mode == kBinary)
+          file.erase(file.begin());
+      }
+
+      return input;
+    }
+
+    SHA<std>::Hash hash;
+    std::string file;
+    bool tag;
+    Mode mode;
+    char ending;
+  };
+
+  template <Standard std>
+  int print(Options& options) {
+    const auto& mode = options.mode;
+    const bool zero = options.zero;
+    const bool tag = options.tag;
+    const std::ios_base::openmode openmode = (mode == kBinary || tag
+                                              ? std::ios_base::in | std::ios_base::binary
+                                              : std::ios_base::in);
+
+    for (auto& filename : options.filenames) {
+      const auto& hash = SHA<std>::function(std::ifstream{filename, openmode});
+      std::cout << Format<std>{hash, filename, tag, mode, zero ? '\0' : '\n'};
+    }
+
+    return 0;
+  }
+
+  int print(Options& options) {
+    const auto std = options.std;
+    switch (std) {
+    case k1: return print<k1>(options);
+    case k224: return print<k224>(options);
+    case k256: return print<k256>(options);
+    case k384: return print<k384>(options);
+    case k512: return print<k512>(options);
+    case k512_224: return print<k512_224>(options);
+    case k512_256: return print<k512_256>(options);
+    }
+    throw std::invalid_argument{"unsupported standard " + std::to_string(std)};
   }
 
   export int run(int argc, char* argv[]) {

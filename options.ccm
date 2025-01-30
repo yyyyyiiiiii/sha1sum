@@ -11,9 +11,21 @@ import :istream;
 
 namespace app {
   export enum Mode {kBinary, kText};
-  export enum Standard {k1, k224, k256, k512, k512_224, k512_256};
+  export enum Standard {k1, k224, k256, k384, k512, k512_224, k512_256};
 
   constexpr size_t kStandardsCount = k512_256 + 1;
+
+  export std::string to_string(const Standard& std) {
+    const char* array[kStandardsCount];
+    array[k1] = "1";
+    array[k224] = "224";
+    array[k256] = "256";
+    array[k384] = "384";
+    array[k512] = "512";
+    array[k512_224] = "512/224";
+    array[k512_256] = "512/256";
+    return array[std];
+  }
 
   static std::istream& operator>>(std::istream& input, Mode& mode) {
     istream::Fail fail{input};
@@ -67,6 +79,7 @@ namespace app {
     std::map<std::string, Standard> map{{"1", k1},
                                         {"224", k224},
                                         {"256", k256},
+                                        {"384", k384},
                                         {"512", k512},
                                         {"512/224", k512_224},
                                         {"512/256", k512_256}};
@@ -90,6 +103,7 @@ namespace app {
     array[k1] = "1";
     array[k224] = "224";
     array[k256] = "256";
+    array[k384] = "384";
     array[k512] = "512";
     array[k512_224] = "512/224";
     array[k512_256] = "512/256";
@@ -105,7 +119,7 @@ namespace app {
     std::vector<std::string> filenames;
 
     Mode mode;
-    Standard standard;
+    Standard std;
     bool check;
     bool tag;
     bool zero;
@@ -166,7 +180,7 @@ namespace app {
     options.check = map.count("check");
     options.tag = map.count("tag");
     options.zero = map.count("zero");
-    options.standard = map["std"].as<Standard>();
+    options.std = map["std"].as<Standard>();
 
     options.ignore = false;
 
