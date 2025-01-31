@@ -44,6 +44,7 @@ namespace app::sha {
   struct Hash : public std::array<std::remove_extent_t<D>,
                                   (B / (sizeof(std::remove_extent_t<D>) * CHAR_BIT)
                                    + (B % (sizeof(std::remove_extent_t<D>) * CHAR_BIT) != 0))> {
+    constexpr static size_t bits = B;
     using T = std::remove_extent_t<D>;
     constexpr static size_t T_bits = sizeof(T) * CHAR_BIT;
     constexpr static size_t N = (B / T_bits + (B % T_bits != 0));
@@ -74,16 +75,16 @@ namespace app::sha {
       return os;
     }
 
-    friend std::istream& operator>>(std::istream& is, Hash<D, B>& hash) {
-      istream::Fail fail{is};
-      auto flags = is.flags();
+    friend std::istream& operator>>(std::istream& input, Hash<D, B>& hash) {
+      istream::Fail fail{input};
 
+      auto flags = input.flags();
       std::string buffer;
       for (int i = 0; i < N; i++) {
         auto& value = hash[i];
         const size_t shift = std::max((i + 1) * T_bits, B) - B;
         const size_t w = (T_bits - shift) / 4;
-        is >> std::setw(w) >> buffer;
+        input >> std::setw(w) >> buffer;
         std::istringstream is_buffer{buffer};
         is_buffer >> std::hex >> value;
         if (is_buffer.fail())
@@ -91,8 +92,8 @@ namespace app::sha {
         value <<= shift;
       }
 
-      is.flags(flags);
-      return is;
+      input.flags(flags);
+      return input;
     }
   };
 

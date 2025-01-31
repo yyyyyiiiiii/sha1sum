@@ -5,6 +5,8 @@ module;
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <string>
+#include <tuple>
 
 export module App;
 export import :hash;
@@ -12,132 +14,6 @@ import :options;
 
 namespace app {
   namespace fs = std::filesystem;
-
-  struct Hash {
-    Hash() = default;
-
-    Hash(const sha::v1::Hash& hash,
-         const std::string& filename,
-         bool tag,
-         std::ios_base::openmode openmode,
-         char ending)
-      : hash{hash},
-        filename{filename},
-        tag{tag},
-        openmode{openmode},
-        ending{ending} {}
-
-    friend std::ostream& operator<<(std::ostream&, const Hash&);
-    friend std::istream& operator>>(std::istream&, Hash&);
-
-    sha::v1::Hash hash;
-    std::string filename;
-    bool tag;
-    std::ios_base::openmode openmode;
-    char ending;
-  };
-
-  std::ostream& operator<<(std::ostream& os, const Hash& it) {
-    auto& hash = it.hash;
-    auto& filename = it.filename;
-    bool tag = it.tag;
-    auto& openmode = it.openmode;
-    char ending = it.ending;
-    if (!tag)
-      os << hash
-         << (openmode & std::ios_base::binary ? " *" : "  ") << filename
-         << ending;
-    else
-      os << "SHA1 (" << filename << ") = "
-         << hash
-         << ending;
-    return os;
-  }
-
-  void skipws(std::istream& is) {
-    if (!is)
-      return;
-    char ch;
-    is >> std::skipws >> ch;
-    is.unget();
-  }
-
-  std::istream& operator>>(std::istream& is, Hash& it) {
-    istream::Fail fail{is};
-
-    auto& hash = it.hash;
-    auto& filename = it.filename;
-    auto& tag = it.tag;
-    auto& openmode = it.openmode;
-    auto& ending = it.ending;
-
-    std::string str;
-
-    is >> str;
-    if (!is)
-      return fail();
-
-    tag = str == "SHA1";
-    if (tag) {
-      openmode = std::ios_base::in | std::ios_base::binary;
-      is >> str;
-      if (!is || str.front() != '(' || str.back() != ')')
-        return fail();
-      filename = std::string{std::next(str.begin()), std::prev(str.end())};
-      is >> str;
-      if (!is || str.front() != '=')
-        return fail();
-      is >> hash;
-      if (is.fail())
-        return is;
-    } else {
-      std::istringstream istr{str};
-      istr >> hash;
-      if (istr.fail())
-        return fail();
-      is >> filename;
-      openmode = (filename[0] == '*' && !fs::exists(filename)
-                  ? std::ios_base::in | std::ios_base::binary
-                  : std::ios_base::in);
-      if ((openmode & std::ios_base::binary) && filename[0] == '*')
-        filename.erase(0, 1);
-    }
-
-    ending = is.get();
-    return is;
-  }
-
-  int verify(Options& options) {
-    for (auto& filename : options.filenames) {
-      std::ifstream input{filename};
-      while (skipws(input), input) {
-        Hash hash;
-        input >> hash;
-
-        if (input.fail()) {
-          std::string line;
-          input.clear();
-          std::getline(input, line);
-          std::cerr << line << ": FAILED to parse" << std::endl;
-          continue;
-        }
-
-        const auto& filename = hash.filename;
-        const auto& openmode = hash.openmode;
-        std::ifstream is{filename, openmode};
-
-        if (!is.good()) {
-          std::cerr << filename << ": FAILED open or read" << std::endl;
-          continue;
-        }
-
-        const auto& shav1_hash = sha::v1::hash(is);
-        std::cout << filename << ": " << (shav1_hash == hash.hash ? "OK" : "FAILED") << std::endl;
-      }
-    }
-    return 0;
-  }
-
   template <Standard>
   struct SHA;
 
@@ -192,6 +68,8 @@ namespace app {
 
   template <Standard std>
   struct Format {
+    Format() = default;
+
     Format(const SHA<std>::Hash& hash,
            const std::string& file,
            bool tag,
@@ -234,7 +112,7 @@ namespace app {
 
       if (input >> buffer, buffer.empty()) return fail();
 
-      tag = buffer == "SHA" + to_string(std);
+      tag = (buffer == "SHA" + to_string(std));
       if (tag) {
         mode = kBinary;
         if (input >> file,
@@ -242,18 +120,30 @@ namespace app {
             || (file.front() != '(' || file.back() != ')')) return fail();
 
         file.erase(file.begin());
-        file.erase(file.end());
+        file.erase(std::prev(file.end()));
 
         if (input >> buffer,
             buffer.empty() || buffer != "=") return fail();
-        if (input >> hash, input.fail()) return fail();
-      } else {
+        if (input >> buffer,
+            buffer.size() != SHA<std>::Hash::bits / 4) return fail();
+
         std::istringstream hash_input{buffer};
-        if (hash_input >> hash, hash_input.fail()) return fail();
-        if (input >> file, file.empty()) return fail();
-        mode = file.front() == '*' && !fs::exists(file) ? kBinary : kText;
+        if (hash_input >> hash,
+            hash_input.fail()) return fail();
+
+      } else if (buffer.size() == SHA<std>::Hash::bits / 4) {
+        std::istringstream hash_input{buffer};
+        if (hash_input >> hash,
+            hash_input.fail()) return fail();
+        if (input >> file,
+            file.empty()) return fail();
+        mode = (file.front() == '*' && !fs::exists(file)
+                ? kBinary
+                : kText);
         if (mode == kBinary)
           file.erase(file.begin());
+      } else {
+        return fail();
       }
 
       return input;
@@ -297,6 +187,71 @@ namespace app {
     throw std::invalid_argument{"unsupported standard " + std::to_string(std)};
   }
 
+  template <Standard std>
+  bool verify(const Format<std>& format) {
+    const std::ios_base::openmode openmode = (format.mode == kBinary || format.tag
+                                              ? std::ios_base::in | std::ios_base::binary
+                                              : std::ios_base::in);
+    std::ifstream input{format.file, openmode};
+    if (!input) {
+      std::cerr << format.file
+                << ": FAILED to open or read (SHA"
+                << std << ")"
+                << std::endl;
+      return false;
+    }
+
+    const auto& hash = SHA<std>::function(input);
+    std::cout << format.file
+              << " " << (hash == format.hash ? "OK" : "FAILED")
+              << " (SHA" << std << ")" << std::endl;
+    return hash == format.hash;
+  }
+
+  template <Standard std>
+  std::tuple<bool, bool> verify(const std::string& line) {
+    std::istringstream input{line};
+    Format<std> format;
+    if (input >> format, !input.fail())
+      return {true, verify(format)};
+    return {false, false};
+  }
+
+  template <Standard std>
+  void verify(const std::string& line, bool& parsed, bool& verified) {
+    auto [parsedx, verifiedx] = verify<std>(line);
+    parsed |= parsedx;
+    verified |= verified;
+  }
+
+  int verify(const std::vector<std::string>& files) {
+    for (auto&& file : files) {
+      std::ifstream input{file};
+
+      while (input) {
+        std::string lines;
+        while (std::getline(input, lines)) {
+          std::istringstream lines_input{lines};
+          std::string line;
+          while (std::getline(lines_input, line)) {
+            auto [parsed, verified] = verify<k1>(line);
+            if (!verified) verify<k224>(line, parsed, verified);
+            if (!verified) verify<k256>(line, parsed, verified);
+            if (!verified) verify<k384>(line, parsed, verified);
+            if (!verified) verify<k512>(line, parsed, verified);
+            if (!verified) verify<k512_224>(line, parsed, verified);
+            if (!verified) verify<k512_256>(line, parsed, verified);
+            if (!verified && !parsed)
+              std::cerr << "failed to parse: '" << line << "'" << std::endl;
+          }
+        }
+      }
+
+    }
+
+    return 0;
+  }
+
   export int run(int argc, char* argv[]) {
     Options options = parse(argc, argv);
 
@@ -304,6 +259,6 @@ namespace app {
       return options.success ? 0 : -1;
 
     const bool check = options.check;
-    return !check ? print(options) : verify(options);
+    return !check ? print(options) : verify(options.filenames);
   }
 }
