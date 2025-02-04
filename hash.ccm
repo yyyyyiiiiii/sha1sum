@@ -131,17 +131,14 @@ namespace app::sha {
     ((U*)P)[M_bits / U_bits - 1] = std::byteswap(total);
   }
 
-  template <class D>
-  using digest_fn_t = void(D&);
-
   template <class D, class M>
   using update_fn_t = void(D&, const M&);
 
-  template <class H, class D, class M_t, class U, digest_fn_t<D> init_digest, update_fn_t<D, M_t> update>
-  H hash(std::istream& istream) {
-    D digest;
-    init_digest(digest);
+  template <class D>
+  using init_digest_fn_t = void(D&);
 
+  template <class H, class D, class M_t, class U>
+  H hash(std::istream& istream, D& digest, update_fn_t<D, M_t> update) {
     M_t M;
     M_t P; // second message, when padding goes over one
     U total = 0;
@@ -173,6 +170,40 @@ namespace app::sha {
 
     return digest;
   }
+
+  template <class Hash,
+            class Digest,
+            class Message,
+            class Bits,
+            init_digest_fn_t<Digest> init,
+            update_fn_t<Digest, Message> update>
+  struct hashers {
+    static Hash operator()(std::istream& istream, Digest& digest) {
+      return hash<Hash, Digest, Message, Bits>(istream, digest, update);
+    }
+
+    static Hash operator()(std::istream& istream, Digest&& digest) {
+      return operator()(istream, digest);
+    }
+
+    static Hash operator()(std::istream& istream) {
+      Digest digest;
+      init(digest);
+      return operator()(istream, digest);
+    }
+
+    static Hash operator()(std::istream&& istream, Digest& digest) {
+      return operator()(istream, digest);
+    }
+
+    static Hash operator()(std::istream&& istream, Digest&& digest) {
+      return operator()(istream, digest);
+    }
+
+    static Hash operator()(std::istream&& istream) {
+      return operator()(istream);
+    }
+  };
 }
 
 namespace app::sha::v1 {
@@ -232,7 +263,7 @@ namespace app::sha::v1 {
     digest[4] += e;
   }
 
-  constexpr void digest(Digest& digest) {
+  void digest(Digest& digest) {
     digest[0] = 0x67452301;
     digest[1] = 0xefcdab89;
     digest[2] = 0x98badcfe;
@@ -240,13 +271,7 @@ namespace app::sha::v1 {
     digest[4] = 0xc3d2e1f0;
   }
 
-  export Hash hash(std::istream& input) {
-    return sha::hash<Hash, Digest, Message, uint64_t, digest, update>(input);
-  }
-
-  export Hash hash(std::istream&& istream) {
-    return hash(istream);
-  }
+  export constexpr hashers<Hash, Digest, Message, uint64_t, digest, update> hash;
 }
 
 namespace app::sha::v224 {
@@ -331,7 +356,7 @@ namespace app::sha::v224 {
 
   using namespace functions;
 
-  constexpr void digest(Digest& digest) {
+  void digest(Digest& digest) {
     digest[0] = 0xc1059ed8;
     digest[1] = 0x367cd507;
     digest[2] = 0x3070dd17;
@@ -342,13 +367,7 @@ namespace app::sha::v224 {
     digest[7] = 0xbefa4fa4;
   }
 
-  export Hash hash(std::istream& input) {
-    return sha::hash<Hash, Digest, Message, uint64_t, digest, update>(input);
-  }
-
-  export Hash hash(std::istream&& istream) {
-    return hash(istream);
-  }
+  export constexpr hashers<Hash, Digest, Message, uint64_t, digest, update> hash;
 }
 
 namespace app::sha::v256 {
@@ -359,7 +378,7 @@ namespace app::sha::v256 {
 
   using namespace sha::v224::functions;
 
-  constexpr void digest(Digest& digest) {
+  void digest(Digest& digest) {
     digest[0] = 0x6a09e667;
     digest[1] = 0xbb67ae85;
     digest[2] = 0x3c6ef372;
@@ -370,13 +389,7 @@ namespace app::sha::v256 {
     digest[7] = 0x5be0cd19;
   }
 
-  export Hash hash(std::istream& input) {
-    return sha::hash<Hash, Digest, Message, uint64_t, digest, update>(input);
-  }
-
-  export Hash hash(std::istream&& istream) {
-    return hash(istream);
-  }
+  export constexpr hashers<Hash, Digest, Message, uint64_t, digest, update> hash;
 }
 
 using uint128_t = __uint128_t;
@@ -475,7 +488,7 @@ namespace app::sha::v384 {
 
   using namespace functions;
 
-  constexpr void digest(Digest& digest) {
+  void digest(Digest& digest) {
     digest[0] = 0xcbbb9d5dc1059ed8;
     digest[1] = 0x629a292a367cd507;
     digest[2] = 0x9159015a3070dd17;
@@ -486,13 +499,7 @@ namespace app::sha::v384 {
     digest[7] = 0x47b5481dbefa4fa4;
   }
 
-  export Hash hash(std::istream& input) {
-    return sha::hash<Hash, Digest, Message, uint128_t, digest, update>(input);
-  }
-
-  export Hash hash(std::istream&& istream) {
-    return hash(istream);
-  }
+  export constexpr hashers<Hash, Digest, Message, uint128_t, digest, update> hash;
 }
 
 namespace app::sha::v512 {
@@ -503,7 +510,7 @@ namespace app::sha::v512 {
 
   using namespace sha::v384::functions;
 
-  constexpr void digest(Digest& digest) {
+  void digest(Digest& digest) {
     digest[0] = 0x6a09e667f3bcc908;
     digest[1] = 0xbb67ae8584caa73b;
     digest[2] = 0x3c6ef372fe94f82b;
@@ -514,13 +521,7 @@ namespace app::sha::v512 {
     digest[7] = 0x5be0cd19137e2179;
   }
 
-  export Hash hash(std::istream& input) {
-    return sha::hash<Hash, Digest, Message, uint128_t, digest, update>(input);
-  }
-
-  export Hash hash(std::istream&& istream) {
-    return hash(istream);
-  }
+  export constexpr hashers<Hash, Digest, Message, uint128_t, digest, update> hash;
 }
 
 namespace app::sha::v512_224 {
@@ -531,7 +532,7 @@ namespace app::sha::v512_224 {
 
   using namespace sha::v384::functions;
 
-  constexpr void digest(Digest& digest) {
+  void digest(Digest& digest) {
     digest[0] = 0x8c3d37c819544da2;
     digest[1] = 0x73e1996689dcd4d6;
     digest[2] = 0x1dfab7ae32ff9c82;
@@ -542,13 +543,7 @@ namespace app::sha::v512_224 {
     digest[7] = 0x1112e6ad91d692a1;
   }
 
-  export Hash hash(std::istream& input) {
-    return sha::hash<Hash, Digest, Message, uint128_t, digest, update>(input);
-  }
-
-  export Hash hash(std::istream&& istream) {
-    return hash(istream);
-  }
+  export constexpr hashers<Hash, Digest, Message, uint128_t, digest, update> hash;
 }
 
 namespace app::sha::v512_256 {
@@ -570,11 +565,5 @@ namespace app::sha::v512_256 {
     digest[7] = 0x0eb72ddc81c52ca2;
   }
 
-  export Hash hash(std::istream& input) {
-    return sha::hash<Hash, Digest, Message, uint128_t, digest, update>(input);
-  }
-
-  export Hash hash(std::istream&& istream) {
-    return hash(istream);
-  }
+  export constexpr hashers<Hash, Digest, Message, uint128_t, digest, update> hash;
 }
