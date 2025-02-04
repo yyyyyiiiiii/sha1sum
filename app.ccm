@@ -209,19 +209,13 @@ namespace app {
   }
 
   template <Standard std>
-  std::tuple<bool, bool> verify(const std::string& line) {
+  bool verify(const std::string& line) {
     std::istringstream input{line};
     Format<std> format;
-    if (input >> format, !input.fail())
-      return {true, verify(format)};
-    return {false, false};
-  }
-
-  template <Standard std>
-  void verify(const std::string& line, bool& parsed, bool& verified) {
-    auto [parsedx, verifiedx] = verify<std>(line);
-    parsed |= parsedx;
-    verified |= verified;
+    if (input >> format, input.fail())
+      return false;
+    verify(format);
+    return true;
   }
 
   int verify(const std::vector<std::string>& files) {
@@ -234,14 +228,14 @@ namespace app {
           std::istringstream lines_input{lines};
           std::string line;
           while (std::getline(lines_input, line)) {
-            auto [parsed, verified] = verify<k1>(line);
-            if (!verified) verify<k224>(line, parsed, verified);
-            if (!verified) verify<k256>(line, parsed, verified);
-            if (!verified) verify<k384>(line, parsed, verified);
-            if (!verified) verify<k512>(line, parsed, verified);
-            if (!verified) verify<k512_224>(line, parsed, verified);
-            if (!verified) verify<k512_256>(line, parsed, verified);
-            if (!verified && !parsed)
+            bool parsed = verify<k1>(line);
+            parsed |= verify<k224>(line);
+            parsed |= verify<k256>(line);
+            parsed |= verify<k384>(line);
+            parsed |= verify<k512>(line);
+            parsed |= verify<k512_224>(line);
+            parsed |= verify<k512_256>(line);
+            if (!parsed)
               std::cerr << "failed to parse: '" << line << "'" << std::endl;
           }
         }

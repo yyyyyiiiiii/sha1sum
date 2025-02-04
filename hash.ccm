@@ -263,7 +263,7 @@ namespace app::sha::v1 {
     digest[4] += e;
   }
 
-  void digest(Digest& digest) {
+  constexpr void digest(Digest& digest) {
     digest[0] = 0x67452301;
     digest[1] = 0xefcdab89;
     digest[2] = 0x98badcfe;
@@ -356,7 +356,7 @@ namespace app::sha::v224 {
 
   using namespace functions;
 
-  void digest(Digest& digest) {
+  constexpr void digest(Digest& digest) {
     digest[0] = 0xc1059ed8;
     digest[1] = 0x367cd507;
     digest[2] = 0x3070dd17;
@@ -378,7 +378,7 @@ namespace app::sha::v256 {
 
   using namespace sha::v224::functions;
 
-  void digest(Digest& digest) {
+  constexpr void digest(Digest& digest) {
     digest[0] = 0x6a09e667;
     digest[1] = 0xbb67ae85;
     digest[2] = 0x3c6ef372;
@@ -488,7 +488,7 @@ namespace app::sha::v384 {
 
   using namespace functions;
 
-  void digest(Digest& digest) {
+  constexpr void digest(Digest& digest) {
     digest[0] = 0xcbbb9d5dc1059ed8;
     digest[1] = 0x629a292a367cd507;
     digest[2] = 0x9159015a3070dd17;
@@ -510,7 +510,7 @@ namespace app::sha::v512 {
 
   using namespace sha::v384::functions;
 
-  void digest(Digest& digest) {
+  constexpr void digest(Digest& digest) {
     digest[0] = 0x6a09e667f3bcc908;
     digest[1] = 0xbb67ae8584caa73b;
     digest[2] = 0x3c6ef372fe94f82b;
@@ -532,7 +532,7 @@ namespace app::sha::v512_224 {
 
   using namespace sha::v384::functions;
 
-  void digest(Digest& digest) {
+  constexpr void digest(Digest& digest) {
     digest[0] = 0x8c3d37c819544da2;
     digest[1] = 0x73e1996689dcd4d6;
     digest[2] = 0x1dfab7ae32ff9c82;
